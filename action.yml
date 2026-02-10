@@ -1,0 +1,100 @@
+name: 'Blueprint'
+description: 'SBOM generation and vulnerability analysis for software supply chain security'
+author: 'build-flow-labs'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  command:
+    description: 'Command to run: sbom or vuln'
+    required: true
+  format:
+    description: 'SBOM format (cyclonedx-json, cyclonedx-xml, spdx-json)'
+    required: false
+    default: 'cyclonedx-json'
+  path:
+    description: 'Path to scan for dependency files (for sbom command)'
+    required: false
+    default: '.'
+  trivy-results:
+    description: 'Path to Trivy JSON results file (for vuln command)'
+    required: false
+  threshold:
+    description: 'Vulnerability gate threshold (no_critical, no_critical_high, no_critical_high_medium, no_vulnerabilities)'
+    required: false
+    default: 'no_critical_high'
+  ignore-unfixed:
+    description: 'Ignore vulnerabilities without available fixes'
+    required: false
+    default: 'false'
+  output:
+    description: 'Output file path for SBOM'
+    required: false
+
+outputs:
+  sbom:
+    description: 'Generated SBOM content (JSON)'
+  sbom-file:
+    description: 'Path to generated SBOM file'
+  passes-gate:
+    description: 'Whether vulnerability gate passed (true/false)'
+  vulnerability-summary:
+    description: 'Vulnerability summary as JSON'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        cache: false
+
+    - name: Build Blueprint
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}
+        go build -o blueprint ./cmd/blueprint
+
+    - name: Run SBOM Generation
+      if: inputs.command == 'sbom'
+      shell: bash
+      run: |
+        OUTPUT_FILE="${{ inputs.output }}"
+        if [ -z "$OUTPUT_FILE" ]; then
+          OUTPUT_FILE="sbom.json"
+        fi
+
+        ${{ github.action_path }}/blueprint sbom generate \
+          --path "${{ inputs.path }}" \
+          --format "${{ inputs.format }}" \
+          --output "$OUTPUT_FILE"
+
+        echo "sbom-file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+        echo "sbom=$(cat $OUTPUT_FILE | jq -c .)" >> $GITHUB_OUTPUT
+
+    - name: Run Vulnerability Analysis
+      if: inputs.command == 'vuln'
+      shell: bash
+      run: |
+        IGNORE_FLAG=""
+        if [ "${{ inputs.ignore-unfixed }}" == "true" ]; then
+          IGNORE_FLAG="--ignore-unfixed"
+        fi
+
+        RESULT=$(${{ github.action_path }}/blueprint vuln analyze \
+          --input "${{ inputs.trivy-results }}" \
+          --threshold "${{ inputs.threshold }}" \
+          $IGNORE_FLAG \
+          --json 2>&1) || EXIT_CODE=$?
+
+        echo "vulnerability-summary=$(echo "$RESULT" | jq -c .summary)" >> $GITHUB_OUTPUT
+
+        if [ "${EXIT_CODE:-0}" -eq 0 ]; then
+          echo "passes-gate=true" >> $GITHUB_OUTPUT
+        else
+          echo "passes-gate=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
