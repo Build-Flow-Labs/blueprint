@@ -1,5 +1,53 @@
 # Blueprint Marketing Strategy
 
+## Relationship with buildflowlabs.com
+
+**Build Flow Labs** is the company. **Blueprint** and **BuildGuard** are the products.
+
+### Brand Architecture
+
+```
+Build Flow Labs (Company)
+├── buildflowlabs.com        ← Company website, thought leadership
+├── BuildGuard               ← Flagship SaaS product (policy enforcement)
+└── Blueprint                ← Developer toolkit (SBOM + PBOM generation)
+```
+
+### Website Strategy
+
+| Domain | Purpose |
+|--------|---------|
+| buildflowlabs.com | Company site, advisory services, blog, contact |
+| buildflowlabs.com/buildguard | BuildGuard product pages, pricing, demo requests |
+| buildflowlabs.com/blueprint | Blueprint product pages, docs, download |
+
+### Content Strategy
+
+**buildflowlabs.com** should:
+- Establish thought leadership on supply chain security
+- Publish PBOM educational content (we coined the implementation)
+- Drive leads to both products
+- Showcase advisory tiers (Foundational Sprint → High-Trust Enterprise)
+
+**Blueprint-specific content**:
+- Technical docs and CLI reference (behind login/license)
+- Integration guides (GitHub Actions, GitLab CI)
+- PBOM concepts explained (not the schema itself)
+
+### Revenue Relationship
+
+```
+Blueprint (Entry Point)          →    BuildGuard (Upsell)
+─────────────────────────────────      ────────────────────────
+Self-serve, per-repo pricing           Enterprise, per-org pricing
+Generates SBOMs + PBOMs                Enforces policies on them
+"Generate evidence"                    "Prove compliance"
+```
+
+Blueprint can be sold standalone, but the full value comes with BuildGuard integration.
+
+---
+
 ## Product Positioning
 
 **Blueprint** is the **bootstrap layer** of Build Flow Labs — a proprietary, federal-aligned starter kit for secure software delivery.
@@ -42,26 +90,29 @@ We have the **only working PBOM implementation**:
 
 ---
 
-## Standardization Strategy
+## IP Protection Strategy
 
-### Phase 1: Market Position First (Now)
-- Keep schema, scoring, and tooling **proprietary**
-- Build paying customer base
-- Become the de facto PBOM tool through adoption
-- "Blueprint PBOM" becomes synonymous with "PBOM"
+### Fully Proprietary
+- **No open source** — Blueprint and PBOM are commercial products
+- Schema, scoring algorithms, and tooling remain closed source
+- Source code in private repositories only
+- Customers get binaries/SaaS access, not source
 
-### Phase 2: Industry Credibility (Later, 12-24 months)
-- Once market leader, consider donating schema to CycloneDX/OWASP
-- Position as "the battle-tested PBOM standard"
-- Keep implementation (scoring, dashboard, enrichment) proprietary
-- Competitors can implement schema, but Blueprint remains the reference
+### What We Protect
+| Asset | Protection Level |
+|-------|------------------|
+| PBOM JSON Schema | Proprietary, not published |
+| 4-axis scoring algorithm | Proprietary, core IP |
+| Health score weights/thresholds | Proprietary |
+| Webhook enrichment pipeline | Proprietary |
+| Dashboard and UI | Proprietary |
+| CLI source code | Proprietary |
 
-### Precedents
-- **HashiCorp**: Terraform was proprietary for years before OpenTofu pressure
-- **Docker**: Defined container format, then donated to OCI
-- **Kubernetes**: Google open-sourced after proving the model internally
-
-**Rule**: Define the standard by winning the market first. Formalize later.
+### Standardization (Future, Optional)
+- **Only consider** if/when we have dominant market position
+- Would only publish schema, never implementation
+- Decision to be made later — no commitment now
+- Default position: keep everything proprietary
 
 ---
 
@@ -107,9 +158,9 @@ We have the **only working PBOM implementation**:
 ## Go-to-Market
 
 ### Phase 1: Developer Awareness
-- Technical blog posts on PBOM concept
+- Technical blog posts on PBOM concept (educate, don't reveal implementation)
 - Conference talks (KubeCon, DevSecCon)
-- GitHub presence (but not the IP)
+- Demo videos and webinars
 
 ### Phase 2: Enterprise Sales
 - Target FedRAMP-bound companies
