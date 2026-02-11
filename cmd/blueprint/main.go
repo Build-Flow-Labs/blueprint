@@ -8,120 +8,158 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/build-flow-labs/blueprint/internal/pbom/cli"
 	"github.com/build-flow-labs/blueprint/sbom"
 	"github.com/build-flow-labs/blueprint/templates"
 	"github.com/build-flow-labs/blueprint/vulnscan"
 	"github.com/google/go-github/v60/github"
+	"github.com/spf13/cobra"
 	"golang.org/x/oauth2"
 )
 
-const version = "1.0.0"
+const version = "1.1.0"
+
+var rootCmd = &cobra.Command{
+	Use:   "blueprint",
+	Short: "SBOM, PBOM, and supply chain security toolkit",
+	Long: `Blueprint is the bootstrap layer for secure software delivery.
+
+Generate Software Bill of Materials (SBOM) to know what's inside your artifacts.
+Generate Pipeline Bill of Materials (PBOM) to know how they got there.
+
+Part of the Build Flow Labs ecosystem.`,
+	Version: version,
+}
+
+// SBOM command
+var sbomCmd = &cobra.Command{
+	Use:   "sbom",
+	Short: "Generate Software Bill of Materials",
+}
+
+var sbomGenerateCmd = &cobra.Command{
+	Use:   "generate",
+	Short: "Generate SBOM from local directory or GitHub repository",
+	Run:   runSBOMGenerate,
+}
+
+// SBOM flags
+var (
+	sbomPath   string
+	sbomOrg    string
+	sbomRepo   string
+	sbomFormat string
+	sbomOutput string
+)
+
+// Vuln command
+var vulnCmd = &cobra.Command{
+	Use:   "vuln",
+	Short: "Analyze vulnerability scan results",
+}
+
+var vulnAnalyzeCmd = &cobra.Command{
+	Use:   "analyze",
+	Short: "Analyze Trivy JSON output",
+	Run:   runVulnAnalyze,
+}
+
+// Vuln flags
+var (
+	vulnInput        string
+	vulnThreshold    string
+	vulnIgnoreUnfixed bool
+	vulnJSON         bool
+)
+
+// Template command
+var templateCmd = &cobra.Command{
+	Use:   "template",
+	Short: "Manage workflow templates",
+}
+
+var templateListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List available templates",
+	Run:   runTemplateList,
+}
+
+var templateGetCmd = &cobra.Command{
+	Use:   "get [name]",
+	Short: "Get template content",
+	Args:  cobra.ExactArgs(1),
+	Run:   runTemplateGet,
+}
+
+var templateApplyCmd = &cobra.Command{
+	Use:   "apply",
+	Short: "Apply template to a repository",
+	Run:   runTemplateApply,
+}
+
+// Template apply flags
+var (
+	templateOrg      string
+	templateRepo     string
+	templateID       string
+	templateDirectPush bool
+)
+
+func init() {
+	// SBOM generate flags
+	sbomGenerateCmd.Flags().StringVar(&sbomPath, "path", "", "Local directory to scan")
+	sbomGenerateCmd.Flags().StringVarP(&sbomOrg, "org", "o", "", "GitHub organization")
+	sbomGenerateCmd.Flags().StringVarP(&sbomRepo, "repo", "r", "", "GitHub repository")
+	sbomGenerateCmd.Flags().StringVarP(&sbomFormat, "format", "f", "cyclonedx-json", "Output format: cyclonedx-json, cyclonedx-xml, spdx-json")
+	sbomGenerateCmd.Flags().StringVar(&sbomOutput, "output", "", "Output file (default: stdout)")
+
+	sbomCmd.AddCommand(sbomGenerateCmd)
+
+	// Vuln analyze flags
+	vulnAnalyzeCmd.Flags().StringVarP(&vulnInput, "input", "i", "", "Trivy JSON output file (required)")
+	vulnAnalyzeCmd.Flags().StringVarP(&vulnThreshold, "threshold", "t", "no_critical_high", "Gate threshold")
+	vulnAnalyzeCmd.Flags().BoolVar(&vulnIgnoreUnfixed, "ignore-unfixed", false, "Ignore vulnerabilities without fixes")
+	vulnAnalyzeCmd.Flags().BoolVar(&vulnJSON, "json", false, "Output as JSON")
+	vulnAnalyzeCmd.MarkFlagRequired("input")
+
+	vulnCmd.AddCommand(vulnAnalyzeCmd)
+
+	// Template apply flags
+	templateApplyCmd.Flags().StringVarP(&templateOrg, "org", "o", "", "GitHub organization")
+	templateApplyCmd.Flags().StringVarP(&templateRepo, "repo", "r", "", "GitHub repository")
+	templateApplyCmd.Flags().StringVarP(&templateID, "template", "t", "", "Template ID")
+	templateApplyCmd.Flags().BoolVar(&templateDirectPush, "direct-push", false, "Push directly instead of creating PR")
+
+	templateCmd.AddCommand(templateListCmd)
+	templateCmd.AddCommand(templateGetCmd)
+	templateCmd.AddCommand(templateApplyCmd)
+
+	// Add all commands to root
+	rootCmd.AddCommand(sbomCmd)
+	rootCmd.AddCommand(vulnCmd)
+	rootCmd.AddCommand(templateCmd)
+	rootCmd.AddCommand(cli.RootCmd) // PBOM subcommand
+}
 
 func main() {
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
-	}
-
-	switch os.Args[1] {
-	case "sbom":
-		handleSBOM(os.Args[2:])
-	case "vuln":
-		handleVuln(os.Args[2:])
-	case "template":
-		handleTemplate(os.Args[2:])
-	case "version":
-		fmt.Printf("Blueprint v%s\n", version)
-	case "help", "-h", "--help":
-		printUsage()
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
-		printUsage()
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
-func printUsage() {
-	fmt.Println(`Blueprint - SBOM generation and vulnerability analysis toolkit
-
-Usage:
-  blueprint <command> [options]
-
-Commands:
-  sbom      Generate Software Bill of Materials
-  vuln      Analyze vulnerability scan results
-  template  Manage workflow templates
-  version   Print version information
-  help      Show this help message
-
-Examples:
-  blueprint sbom generate --path .
-  blueprint sbom generate --org myorg --repo myrepo --format cyclonedx-json
-  blueprint vuln analyze --input trivy.json --threshold no_critical_high
-  blueprint template list
-  blueprint template get security-scan`)
-}
-
-// SBOM command handling
-func handleSBOM(args []string) {
-	if len(args) < 1 || args[0] != "generate" {
-		fmt.Println(`Usage: blueprint sbom generate [options]
-
-Options:
-  --path PATH          Local directory to scan for dependency files
-  --org ORG            GitHub organization (requires GITHUB_TOKEN)
-  --repo REPO          GitHub repository name
-  --format FORMAT      Output format: cyclonedx-json (default), cyclonedx-xml, spdx-json
-  --output FILE        Output file (default: stdout)`)
-		return
-	}
-
-	// Parse flags
-	var path, org, repo, format, output string
-	format = "cyclonedx-json"
-
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--path":
-			if i+1 < len(args) {
-				path = args[i+1]
-				i++
-			}
-		case "--org", "-o":
-			if i+1 < len(args) {
-				org = args[i+1]
-				i++
-			}
-		case "--repo", "-r":
-			if i+1 < len(args) {
-				repo = args[i+1]
-				i++
-			}
-		case "--format", "-f":
-			if i+1 < len(args) {
-				format = args[i+1]
-				i++
-			}
-		case "--output":
-			if i+1 < len(args) {
-				output = args[i+1]
-				i++
-			}
-		}
-	}
-
-	// Parse format
-	sbomFormat, err := sbom.ParseFormat(format)
+// SBOM generate implementation
+func runSBOMGenerate(cmd *cobra.Command, args []string) {
+	sbomFormatParsed, err := sbom.ParseFormat(sbomFormat)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
 	var files map[string]string
+	org, repo := sbomOrg, sbomRepo
 
-	if path != "" {
-		// Local mode
-		files, err = scanLocalDirectory(path)
+	if sbomPath != "" {
+		files, err = scanLocalDirectory(sbomPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error scanning directory: %v\n", err)
 			os.Exit(1)
@@ -130,10 +168,9 @@ Options:
 			org = "local"
 		}
 		if repo == "" {
-			repo = filepath.Base(path)
+			repo = filepath.Base(sbomPath)
 		}
 	} else if org != "" && repo != "" {
-		// GitHub mode
 		token := os.Getenv("GITHUB_TOKEN")
 		if token == "" {
 			fmt.Fprintln(os.Stderr, "Error: GITHUB_TOKEN environment variable required for GitHub mode")
@@ -154,31 +191,28 @@ Options:
 		os.Exit(1)
 	}
 
-	// Generate SBOM
 	generator := sbom.NewGenerator()
 	result, err := generator.Generate(&sbom.GeneratorInput{
 		OrgName:  org,
 		RepoName: repo,
 		Files:    files,
-		Format:   sbomFormat,
+		Format:   sbomFormatParsed,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating SBOM: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Output
-	if output != "" {
-		if err := os.WriteFile(output, []byte(result.Content), 0644); err != nil {
+	if sbomOutput != "" {
+		if err := os.WriteFile(sbomOutput, []byte(result.Content), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing output: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Fprintf(os.Stderr, "SBOM written to %s\n", output)
+		fmt.Fprintf(os.Stderr, "SBOM written to %s\n", sbomOutput)
 	} else {
 		fmt.Println(result.Content)
 	}
 
-	// Print stats to stderr
 	fmt.Fprintf(os.Stderr, "\nSBOM Stats:\n")
 	fmt.Fprintf(os.Stderr, "  Total dependencies: %d\n", result.Stats.TotalDependencies)
 	fmt.Fprintf(os.Stderr, "  Direct dependencies: %d\n", result.Stats.DirectDependencies)
@@ -186,61 +220,17 @@ Options:
 	fmt.Fprintf(os.Stderr, "  Ecosystems: %d\n", result.Stats.Ecosystems)
 }
 
-// Vulnerability command handling
-func handleVuln(args []string) {
-	if len(args) < 1 || args[0] != "analyze" {
-		fmt.Println(`Usage: blueprint vuln analyze [options]
-
-Options:
-  --input FILE         Trivy JSON output file (required)
-  --threshold LEVEL    Gate threshold: no_critical, no_critical_high (default),
-                       no_critical_high_medium, no_vulnerabilities
-  --ignore-unfixed     Ignore vulnerabilities without available fixes
-  --json               Output as JSON`)
-		return
-	}
-
-	var input, threshold string
-	var ignoreUnfixed, jsonOutput bool
-	threshold = "no_critical_high"
-
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--input", "-i":
-			if i+1 < len(args) {
-				input = args[i+1]
-				i++
-			}
-		case "--threshold", "-t":
-			if i+1 < len(args) {
-				threshold = args[i+1]
-				i++
-			}
-		case "--ignore-unfixed":
-			ignoreUnfixed = true
-		case "--json":
-			jsonOutput = true
-		}
-	}
-
-	if input == "" {
-		fmt.Fprintln(os.Stderr, "Error: --input required")
-		os.Exit(1)
-	}
-
-	// Read input file
-	data, err := os.ReadFile(input)
+// Vuln analyze implementation
+func runVulnAnalyze(cmd *cobra.Command, args []string) {
+	data, err := os.ReadFile(vulnInput)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Parse threshold
-	gateThreshold := vulnscan.ParseGateThreshold(threshold)
-
-	// Analyze
+	gateThreshold := vulnscan.ParseGateThreshold(vulnThreshold)
 	analyzer := vulnscan.NewAnalyzer(gateThreshold)
-	analyzer.IgnoreUnfixed = ignoreUnfixed
+	analyzer.IgnoreUnfixed = vulnIgnoreUnfixed
 
 	analysis, err := analyzer.AnalyzeFromJSON(data)
 	if err != nil {
@@ -248,13 +238,13 @@ Options:
 		os.Exit(1)
 	}
 
-	if jsonOutput {
+	if vulnJSON {
 		out, _ := json.MarshalIndent(analysis, "", "  ")
 		fmt.Println(string(out))
 	} else {
 		fmt.Printf("Vulnerability Analysis\n")
 		fmt.Printf("======================\n\n")
-		fmt.Printf("Gate Threshold: %s\n", threshold)
+		fmt.Printf("Gate Threshold: %s\n", vulnThreshold)
 		fmt.Printf("Gate Status: %s\n\n", map[bool]string{true: "PASSED", false: "FAILED"}[analysis.PassesGate])
 
 		fmt.Printf("Summary:\n")
@@ -280,154 +270,97 @@ Options:
 		}
 	}
 
-	// Exit with error if gate failed
 	if !analysis.PassesGate {
 		os.Exit(1)
 	}
 }
 
-// Template command handling
-func handleTemplate(args []string) {
-	if len(args) < 1 {
-		fmt.Println(`Usage: blueprint template <subcommand>
+// Template commands implementation
+func runTemplateList(cmd *cobra.Command, args []string) {
+	registry := templates.NewRegistry()
+	tmplList := registry.List()
+	fmt.Printf("Available Templates (%d):\n\n", len(tmplList))
+	for _, t := range tmplList {
+		fmt.Printf("  %s\n", t.ID)
+		fmt.Printf("    %s\n", t.Description)
+		fmt.Printf("    Category: %s\n", t.Category)
+		fmt.Printf("    Frameworks: %s\n\n", strings.Join(t.Frameworks, ", "))
+	}
+}
 
-Subcommands:
-  list              List available workflow templates
-  get <name>        Get template content
-  apply             Apply template to a repository (requires GITHUB_TOKEN)`)
-		return
+func runTemplateGet(cmd *cobra.Command, args []string) {
+	registry := templates.NewRegistry()
+	content, err := registry.Generate(args[0], &templates.TemplateContext{
+		OrgName:       "example-org",
+		RepoName:      "example-repo",
+		DefaultBranch: "main",
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(content)
+}
+
+func runTemplateApply(cmd *cobra.Command, args []string) {
+	if templateOrg == "" || templateRepo == "" || templateID == "" {
+		fmt.Fprintln(os.Stderr, "Error: --org, --repo, and --template required")
+		os.Exit(1)
 	}
 
-	registry := templates.NewRegistry()
-
-	switch args[0] {
-	case "list":
-		tmplList := registry.List()
-		fmt.Printf("Available Templates (%d):\n\n", len(tmplList))
-		for _, t := range tmplList {
-			fmt.Printf("  %s\n", t.ID)
-			fmt.Printf("    %s\n", t.Description)
-			fmt.Printf("    Category: %s\n", t.Category)
-			fmt.Printf("    Frameworks: %s\n\n", strings.Join(t.Frameworks, ", "))
-		}
-
-	case "get":
-		if len(args) < 2 {
-			fmt.Fprintln(os.Stderr, "Error: template name required")
-			os.Exit(1)
-		}
-		content, err := registry.Generate(args[1], &templates.TemplateContext{
-			OrgName:       "example-org",
-			RepoName:      "example-repo",
-			DefaultBranch: "main",
-		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println(content)
-
-	case "apply":
-		// Parse apply flags
-		var org, repo, templateID string
-		createPR := true
-
-		for i := 1; i < len(args); i++ {
-			switch args[i] {
-			case "--org", "-o":
-				if i+1 < len(args) {
-					org = args[i+1]
-					i++
-				}
-			case "--repo", "-r":
-				if i+1 < len(args) {
-					repo = args[i+1]
-					i++
-				}
-			case "--template", "-t":
-				if i+1 < len(args) {
-					templateID = args[i+1]
-					i++
-				}
-			case "--direct-push":
-				createPR = false
-			}
-		}
-
-		if org == "" || repo == "" || templateID == "" {
-			fmt.Fprintln(os.Stderr, "Error: --org, --repo, and --template required")
-			os.Exit(1)
-		}
-
-		token := os.Getenv("GITHUB_TOKEN")
-		if token == "" {
-			fmt.Fprintln(os.Stderr, "Error: GITHUB_TOKEN environment variable required")
-			os.Exit(1)
-		}
-
-		ctx := context.Background()
-		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-		tc := oauth2.NewClient(ctx, ts)
-		client := github.NewClient(tc)
-
-		gen := templates.NewGenerator(client)
-		result, err := gen.Apply(ctx, org, repo, templateID, &templates.TemplateContext{
-			OrgName:       org,
-			RepoName:      repo,
-			DefaultBranch: "main",
-		}, &templates.ApplyOptions{CreatePR: createPR})
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
-		if result.Success {
-			if result.PRURL != "" {
-				fmt.Printf("Created PR: %s\n", result.PRURL)
-			} else {
-				fmt.Printf("Applied template directly to %s\n", result.BranchName)
-			}
-		}
-
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown template subcommand: %s\n", args[0])
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		fmt.Fprintln(os.Stderr, "Error: GITHUB_TOKEN environment variable required")
 		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+	tc := oauth2.NewClient(ctx, ts)
+	client := github.NewClient(tc)
+
+	gen := templates.NewGenerator(client)
+	result, err := gen.Apply(ctx, templateOrg, templateRepo, templateID, &templates.TemplateContext{
+		OrgName:       templateOrg,
+		RepoName:      templateRepo,
+		DefaultBranch: "main",
+	}, &templates.ApplyOptions{CreatePR: !templateDirectPush})
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if result.Success {
+		if result.PRURL != "" {
+			fmt.Printf("Created PR: %s\n", result.PRURL)
+		} else {
+			fmt.Printf("Applied template directly to %s\n", result.BranchName)
+		}
 	}
 }
 
 // Helper functions
-
 var dependencyFiles = []string{
-	"go.mod",
-	"go.sum",
-	"package.json",
-	"package-lock.json",
-	"yarn.lock",
-	"requirements.txt",
-	"Pipfile",
-	"Pipfile.lock",
-	"Cargo.toml",
-	"Cargo.lock",
-	"pom.xml",
-	"build.gradle",
-	"Gemfile",
-	"Gemfile.lock",
+	"go.mod", "go.sum",
+	"package.json", "package-lock.json", "yarn.lock",
+	"requirements.txt", "Pipfile", "Pipfile.lock",
+	"Cargo.toml", "Cargo.lock",
+	"pom.xml", "build.gradle",
+	"Gemfile", "Gemfile.lock",
 	"composer.json",
 }
 
 func scanLocalDirectory(path string) (map[string]string, error) {
 	files := make(map[string]string)
-
 	for _, filename := range dependencyFiles {
 		fullPath := filepath.Join(path, filename)
 		data, err := os.ReadFile(fullPath)
 		if err != nil {
-			continue // File doesn't exist, skip
+			continue
 		}
 		files[filename] = string(data)
 	}
-
 	return files, nil
 }
 
@@ -438,11 +371,10 @@ func fetchGitHubFiles(org, repo, token string) (map[string]string, error) {
 	client := github.NewClient(tc)
 
 	files := make(map[string]string)
-
 	for _, filename := range dependencyFiles {
 		content, _, _, err := client.Repositories.GetContents(ctx, org, repo, filename, nil)
 		if err != nil {
-			continue // File doesn't exist, skip
+			continue
 		}
 		if content != nil {
 			decoded, err := content.GetContent()
@@ -452,6 +384,5 @@ func fetchGitHubFiles(org, repo, token string) (map[string]string, error) {
 			files[filename] = decoded
 		}
 	}
-
 	return files, nil
 }

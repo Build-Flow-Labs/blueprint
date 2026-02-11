@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pbom-dev/pbom/schema/pbom.schema.json",
+  "title": "Pipeline Bill of Materials (PBOM)",
+  "description": "Tracks the lineage of code as it transforms into a deployed artifact. An SBOM tells you what is inside the artifact; a PBOM tells you how it got there.",
+  "type": "object",
+  "required": ["pbom_version", "id", "timestamp", "source", "build"],
+  "properties": {
+    "pbom_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version."
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this PBOM document."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this PBOM was generated."
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "build": {
+      "$ref": "#/$defs/build"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      },
+      "description": "Artifacts produced by this build."
+    },
+    "health_score": {
+      "$ref": "#/$defs/healthScore"
+    },
+    "promotion": {
+      "$ref": "#/$defs/promotion"
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "description": "Phase A: Source code identity.",
+      "required": ["repository", "commit_sha"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "Full repository name (org/repo)."
+        },
+        "commit_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "Full 40-char commit SHA."
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch name (e.g. main, feature/foo)."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Full git ref (e.g. refs/heads/main, refs/tags/v1.0.0)."
+        },
+        "author": {
+          "type": "string",
+          "description": "Git commit author."
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "description": "Phase A: Build execution metadata from GitHub Actions.",
+      "required": ["workflow_run_id", "workflow_name", "actor", "status"],
+      "properties": {
+        "workflow_run_id": {
+          "type": "string",
+          "description": "GitHub Actions run ID."
+        },
+        "workflow_name": {
+          "type": "string",
+          "description": "Name of the workflow (e.g. CI, Release)."
+        },
+        "workflow_file": {
+          "type": "string",
+          "description": "Path to the workflow YAML (e.g. .github/workflows/ci.yml)."
+        },
+        "trigger": {
+          "type": "string",
+          "enum": ["push", "pull_request", "workflow_dispatch", "schedule", "release", "other"],
+          "description": "What triggered the workflow."
+        },
+        "actor": {
+          "type": "string",
+          "description": "GitHub user or app that triggered the run."
+        },
+        "runner": {
+          "$ref": "#/$defs/runner"
+        },
+        "tool_versions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value map of build tool versions (e.g. {\"go\": \"1.22.0\", \"node\": \"20.11.0\"})."
+        },
+        "secrets_accessed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names of secrets accessed during the build (values are never stored)."
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["success", "failure", "cancelled"],
+          "description": "Final status of the workflow run."
+        }
+      }
+    },
+    "runner": {
+      "type": "object",
+      "description": "GitHub Actions runner details.",
+      "properties": {
+        "os": {
+          "type": "string",
+          "description": "Runner OS (e.g. ubuntu-22.04, macos-14)."
+        },
+        "arch": {
+          "type": "string",
+          "description": "Runner architecture (e.g. X64, ARM64)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Runner name or label."
+        },
+        "self_hosted": {
+          "type": "boolean",
+          "description": "Whether the runner is self-hosted."
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "description": "Phase B: A produced artifact and its security posture.",
+      "required": ["name", "type", "digest"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Artifact name (e.g. my-service, shared-lib)."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["container-image", "binary", "package", "archive", "other"],
+          "description": "Kind of artifact."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Content-addressable SHA256 digest."
+        },
+        "uri": {
+          "type": "string",
+          "description": "Registry URI including digest (e.g. ghcr.io/org/app@sha256:...)."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tags applied to this artifact (e.g. v1.2.3, latest)."
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "vulnerabilities": {
+          "$ref": "#/$defs/vulnerabilities"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "SLSA provenance metadata.",
+      "properties": {
+        "slsa_level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4,
+          "description": "SLSA build level achieved (0-4)."
+        },
+        "builder_id": {
+          "type": "string",
+          "description": "URI identifying the build system."
+        },
+        "attestation_uri": {
+          "type": "string",
+          "description": "URI to the full provenance attestation if stored externally."
+        }
+      }
+    },
+    "vulnerabilities": {
+      "type": "object",
+      "description": "Vulnerability snapshot at build time.",
+      "properties": {
+        "scanner": {
+          "type": "string",
+          "description": "Scanner used (e.g. trivy, grype, snyk)."
+        },
+        "scanned_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "critical": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "high": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "medium": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "low": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "healthScore": {
+      "type": "object",
+      "description": "Pipeline health assessment with 4-axis scoring.",
+      "required": ["grade", "score", "tool_currency", "secret_hygiene", "provenance", "vulnerability"],
+      "properties": {
+        "grade": {
+          "type": "string",
+          "enum": ["A", "B", "C", "D", "F"],
+          "description": "Composite letter grade."
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Composite numeric score."
+        },
+        "tool_currency": {
+          "$ref": "#/$defs/axisScore"
+        },
+        "secret_hygiene": {
+          "$ref": "#/$defs/axisScore"
+        },
+        "provenance": {
+          "$ref": "#/$defs/axisScore"
+        },
+        "vulnerability": {
+          "$ref": "#/$defs/axisScore"
+        }
+      }
+    },
+    "axisScore": {
+      "type": "object",
+      "description": "A single scoring axis with letter grade and numeric score.",
+      "required": ["grade", "score"],
+      "properties": {
+        "grade": {
+          "type": "string",
+          "enum": ["A", "B", "C", "D", "F"]
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Human-readable findings that contributed to the score."
+        }
+      }
+    },
+    "promotion": {
+      "type": "object",
+      "description": "Phase C: Kargo promotion data (populated when artifact is promoted through stages).",
+      "properties": {
+        "freight_id": {
+          "type": "string",
+          "description": "Kargo Freight resource identifier."
+        },
+        "stage": {
+          "type": "string",
+          "description": "Target Kargo stage (e.g. dev, staging, prod)."
+        },
+        "promoted_by": {
+          "type": "string",
+          "description": "Actor who triggered the promotion."
+        },
+        "promoted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "environment_snapshot": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/coDeployedService"
+          },
+          "description": "Other services in the target environment at promotion time."
+        }
+      }
+    },
+    "coDeployedService": {
+      "type": "object",
+      "description": "A service co-deployed in the same environment.",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

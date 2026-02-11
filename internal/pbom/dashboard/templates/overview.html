@@ -1,0 +1,71 @@
+{{define "content"}}
+<h1>Pipeline Health Overview</h1>
+
+{{if .HealthCards}}
+<h2>Repository Health</h2>
+<div id="health-cards"
+     hx-get="/ui/partials/cards"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+  {{template "health_cards_content" .HealthCards}}
+</div>
+{{end}}
+
+<h2>All PBOMs</h2>
+<div class="filters">
+  <input type="text"
+         name="repo"
+         placeholder="Search repos..."
+         hx-get="/ui/partials/table"
+         hx-trigger="keyup changed delay:300ms"
+         hx-target="#pbom-table"
+         hx-swap="innerHTML"
+         hx-include="[name='status'],[name='grade']"
+         value="{{.Filters.Repo}}">
+  <select name="status"
+          hx-get="/ui/partials/table"
+          hx-trigger="change"
+          hx-target="#pbom-table"
+          hx-swap="innerHTML"
+          hx-include="[name='repo'],[name='grade']">
+    <option value="">All statuses</option>
+    <option value="success"{{if eq .Filters.Status "success"}} selected{{end}}>Success</option>
+    <option value="failure"{{if eq .Filters.Status "failure"}} selected{{end}}>Failure</option>
+    <option value="cancelled"{{if eq .Filters.Status "cancelled"}} selected{{end}}>Cancelled</option>
+  </select>
+  <select name="grade"
+          hx-get="/ui/partials/table"
+          hx-trigger="change"
+          hx-target="#pbom-table"
+          hx-swap="innerHTML"
+          hx-include="[name='repo'],[name='status']">
+    <option value="">All grades</option>
+    <option value="A"{{if eq .Filters.Grade "A"}} selected{{end}}>A</option>
+    <option value="B"{{if eq .Filters.Grade "B"}} selected{{end}}>B</option>
+    <option value="C"{{if eq .Filters.Grade "C"}} selected{{end}}>C</option>
+    <option value="D"{{if eq .Filters.Grade "D"}} selected{{end}}>D</option>
+    <option value="F"{{if eq .Filters.Grade "F"}} selected{{end}}>F</option>
+  </select>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th hx-get="/ui/partials/table?sort=repo" hx-target="#pbom-table" hx-swap="innerHTML" hx-include="[name='repo'],[name='status'],[name='grade']">Repository</th>
+      <th>Branch</th>
+      <th hx-get="/ui/partials/table?sort=status" hx-target="#pbom-table" hx-swap="innerHTML" hx-include="[name='repo'],[name='status'],[name='grade']">Status</th>
+      <th hx-get="/ui/partials/table?sort=grade" hx-target="#pbom-table" hx-swap="innerHTML" hx-include="[name='repo'],[name='status'],[name='grade']">Grade</th>
+      <th>Artifacts</th>
+      <th hx-get="/ui/partials/table?sort=timestamp&desc=true" hx-target="#pbom-table" hx-swap="innerHTML" hx-include="[name='repo'],[name='status'],[name='grade']">Timestamp</th>
+      <th>Actor</th>
+    </tr>
+  </thead>
+  <tbody id="pbom-table"
+         hx-get="/ui/partials/table"
+         hx-trigger="every 30s"
+         hx-swap="innerHTML"
+         hx-include="[name='repo'],[name='status'],[name='grade']">
+    {{template "pbom_table_content" .Entries}}
+  </tbody>
+</table>
+{{end}}

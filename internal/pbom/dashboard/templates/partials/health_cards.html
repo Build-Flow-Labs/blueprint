@@ -1,0 +1,24 @@
+{{define "health_cards_content"}}
+{{if .}}
+<div class="card-grid">
+  {{range .}}
+  <a href="/ui/pbom/{{.Owner}}/{{.Repo}}/{{.RunID}}" style="text-decoration: none; color: inherit;">
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span class="repo-name">{{.Repo}}</span>
+        {{if .Grade}}
+        <span class="grade grade-{{.Grade}}">{{.Grade}}</span>
+        {{else}}
+        <span class="grade grade-none">-</span>
+        {{end}}
+      </div>
+      <span class="meta">{{.Owner}} &middot; <span class="status status-{{.Status}}">{{.Status}}</span></span>
+      <span class="meta">{{timeAgo .Timestamp}}</span>
+    </div>
+  </a>
+  {{end}}
+</div>
+{{else}}
+<p style="color: var(--text-muted);">No PBOMs collected yet.</p>
+{{end}}
+{{end}}

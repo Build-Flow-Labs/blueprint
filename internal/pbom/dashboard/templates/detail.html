@@ -1,0 +1,191 @@
+{{define "content"}}
+<div class="breadcrumb">
+  <a href="/ui">Dashboard</a> &rsaquo; {{.Owner}}/{{.Repo}} &rsaquo; #{{.RunID}}
+</div>
+
+<div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+  <h1 style="margin: 0;">{{.Owner}}/{{.Repo}}</h1>
+  {{if .PBOM.HealthScore}}
+  <span class="grade grade-lg grade-{{.PBOM.HealthScore.Grade}}">{{.PBOM.HealthScore.Grade}}</span>
+  {{else}}
+  <span class="grade grade-lg grade-none">-</span>
+  {{end}}
+  <span class="status status-{{.PBOM.Build.Status}}">{{.PBOM.Build.Status}}</span>
+</div>
+
+<!-- Source -->
+<div class="section">
+  <h3>Source</h3>
+  <dl class="kv-grid">
+    <dt>Repository</dt>
+    <dd>{{if .PBOM.Source.Repository}}<a href="https://github.com/{{.PBOM.Source.Repository}}" target="_blank">{{.PBOM.Source.Repository}}</a>{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Commit</dt>
+    <dd>{{if .PBOM.Source.CommitSHA}}<a href="https://github.com/{{.PBOM.Source.Repository}}/commit/{{.PBOM.Source.CommitSHA}}" target="_blank"><code>{{shortSHA .PBOM.Source.CommitSHA}}</code></a>{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Branch</dt>
+    <dd>{{if .PBOM.Source.Branch}}{{.PBOM.Source.Branch}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Ref</dt>
+    <dd>{{if .PBOM.Source.Ref}}<code>{{.PBOM.Source.Ref}}</code>{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Author</dt>
+    <dd>{{if .PBOM.Source.Author}}{{.PBOM.Source.Author}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+  </dl>
+</div>
+
+<!-- Build -->
+<div class="section">
+  <h3>Build</h3>
+  <dl class="kv-grid">
+    <dt>Workflow</dt>
+    <dd>{{if .PBOM.Build.WorkflowName}}{{.PBOM.Build.WorkflowName}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Workflow File</dt>
+    <dd>{{if .PBOM.Build.WorkflowFile}}<code>{{.PBOM.Build.WorkflowFile}}</code>{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Run ID</dt>
+    <dd>{{if .PBOM.Build.WorkflowRunID}}<a href="https://github.com/{{.PBOM.Source.Repository}}/actions/runs/{{.PBOM.Build.WorkflowRunID}}" target="_blank">{{.PBOM.Build.WorkflowRunID}}</a>{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Trigger</dt>
+    <dd>{{if .PBOM.Build.Trigger}}{{.PBOM.Build.Trigger}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Actor</dt>
+    <dd>{{if .PBOM.Build.Actor}}{{.PBOM.Build.Actor}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Status</dt>
+    <dd>{{if .PBOM.Build.Status}}<span class="status status-{{.PBOM.Build.Status}}">{{.PBOM.Build.Status}}</span>{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Runner</dt>
+    <dd>{{if .PBOM.Build.Runner}}{{.PBOM.Build.Runner.OS}}/{{.PBOM.Build.Runner.Arch}}{{if .PBOM.Build.Runner.SelfHosted}} (self-hosted){{end}} &mdash; {{.PBOM.Build.Runner.Name}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Duration</dt>
+    <dd>{{if and .PBOM.Build.StartedAt .PBOM.Build.CompletedAt}}{{duration .PBOM.Build.StartedAt .PBOM.Build.CompletedAt}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Started</dt>
+    <dd>{{if .PBOM.Build.StartedAt}}{{.PBOM.Build.StartedAt.Format "2006-01-02 15:04:05 UTC"}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Completed</dt>
+    <dd>{{if .PBOM.Build.CompletedAt}}{{.PBOM.Build.CompletedAt.Format "2006-01-02 15:04:05 UTC"}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+  </dl>
+</div>
+
+<!-- Tools -->
+<div class="section">
+  <h3>Build Tools</h3>
+  {{if .PBOM.Build.ToolVersions}}
+  <div class="tag-list">
+    {{range $tool, $ver := .PBOM.Build.ToolVersions}}
+    <span class="tag">{{$tool}} {{$ver}}</span>
+    {{end}}
+  </div>
+  {{else}}
+  <span class="na">N/A &mdash; no tool versions detected</span>
+  {{end}}
+</div>
+
+<!-- Secrets -->
+<div class="section">
+  <h3>Secrets Accessed</h3>
+  {{if .PBOM.Build.SecretsAccessed}}
+  <div class="tag-list">
+    {{range .PBOM.Build.SecretsAccessed}}
+    <span class="tag">{{.}}</span>
+    {{end}}
+  </div>
+  {{else}}
+  <span class="na">N/A &mdash; no secrets detected in workflow</span>
+  {{end}}
+</div>
+
+<!-- Artifacts -->
+<div class="section">
+  <h3>Artifacts</h3>
+  {{if .PBOM.Artifacts}}
+  {{range .PBOM.Artifacts}}
+  <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+    <dl class="kv-grid">
+      <dt>Name</dt>
+      <dd><strong>{{.Name}}</strong> ({{.Type}})</dd>
+      <dt>Digest</dt>
+      <dd>{{if .Digest}}<code>{{truncDigest .Digest}}</code>{{else}}<span class="na">N/A</span>{{end}}</dd>
+      <dt>URI</dt>
+      <dd>{{if .URI}}<code>{{.URI}}</code>{{else}}<span class="na">N/A</span>{{end}}</dd>
+      <dt>Tags</dt>
+      <dd>
+        {{if .Tags}}
+        <div class="tag-list">
+          {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
+        </div>
+        {{else}}<span class="na">N/A</span>{{end}}
+      </dd>
+      <dt>Provenance</dt>
+      <dd>
+        {{if .Provenance}}SLSA Level {{.Provenance.SLSALevel}}{{if .Provenance.BuilderID}} &mdash; {{.Provenance.BuilderID}}{{end}}
+        {{else}}<span class="na">N/A &mdash; no attestation found</span>{{end}}
+      </dd>
+      <dt>Vulnerabilities</dt>
+      <dd>
+        {{if .Vulnerabilities}}
+        <div class="vuln-bar">
+          {{if .Vulnerabilities.Critical}}<span class="vuln-critical">C:{{.Vulnerabilities.Critical}}</span>{{end}}
+          {{if .Vulnerabilities.High}}<span class="vuln-high">H:{{.Vulnerabilities.High}}</span>{{end}}
+          {{if .Vulnerabilities.Medium}}<span class="vuln-medium">M:{{.Vulnerabilities.Medium}}</span>{{end}}
+          {{if .Vulnerabilities.Low}}<span class="vuln-low">L:{{.Vulnerabilities.Low}}</span>{{end}}
+          {{if and (not .Vulnerabilities.Critical) (not .Vulnerabilities.High) (not .Vulnerabilities.Medium) (not .Vulnerabilities.Low)}}
+          <span style="color: var(--green);">Clean</span>
+          {{end}}
+        </div>
+        {{if .Vulnerabilities.Scanner}}
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Scanner: {{.Vulnerabilities.Scanner}}</span>
+        {{end}}
+        {{else}}<span class="na">N/A &mdash; no scan results</span>{{end}}
+      </dd>
+    </dl>
+  </div>
+  {{end}}
+  {{else}}
+  <span class="na">N/A &mdash; no artifacts produced</span>
+  {{end}}
+</div>
+
+<!-- Health Score -->
+<div class="section">
+  <h3>Pipeline Health Score</h3>
+  {{if .PBOM.HealthScore}}
+  <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+    <span class="grade grade-lg grade-{{.PBOM.HealthScore.Grade}}">{{.PBOM.HealthScore.Grade}}</span>
+    <span style="font-size: 1.5rem; font-weight: 700;">{{.PBOM.HealthScore.Score}}/100</span>
+  </div>
+
+  {{template "axis_row" dict "Label" "Tool Currency" "Axis" .PBOM.HealthScore.ToolCurrency}}
+  {{template "axis_row" dict "Label" "Secret Hygiene" "Axis" .PBOM.HealthScore.SecretHygiene}}
+  {{template "axis_row" dict "Label" "Provenance" "Axis" .PBOM.HealthScore.Provenance}}
+  {{template "axis_row" dict "Label" "Vulnerability" "Axis" .PBOM.HealthScore.Vulnerability}}
+  {{else}}
+  <span class="na">N/A &mdash; health score not computed for this PBOM</span>
+  {{end}}
+</div>
+
+<!-- Promotion -->
+<div class="section">
+  <h3>Promotion</h3>
+  {{if .PBOM.Promotion}}
+  <dl class="kv-grid">
+    <dt>Freight ID</dt>
+    <dd>{{if .PBOM.Promotion.FreightID}}{{.PBOM.Promotion.FreightID}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Stage</dt>
+    <dd>{{if .PBOM.Promotion.Stage}}{{.PBOM.Promotion.Stage}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Promoted By</dt>
+    <dd>{{if .PBOM.Promotion.PromotedBy}}{{.PBOM.Promotion.PromotedBy}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+    <dt>Promoted At</dt>
+    <dd>{{if .PBOM.Promotion.PromotedAt}}{{.PBOM.Promotion.PromotedAt.Format "2006-01-02 15:04:05 UTC"}}{{else}}<span class="na">N/A</span>{{end}}</dd>
+  </dl>
+  {{else}}
+  <span class="na">N/A &mdash; no promotion data (Kargo integration deferred)</span>
+  {{end}}
+</div>
+
+{{end}}
+
+{{define "axis_row"}}
+<div class="axis-row">
+  <span class="label">{{.Label}}</span>
+  <span class="grade grade-{{.Axis.Grade}}">{{.Axis.Grade}}</span>
+  <div>
+    <div class="progress-bar">
+      <div class="progress-fill grade-{{.Axis.Grade}}" style="width: {{.Axis.Score}}%;"></div>
+    </div>
+    {{range .Axis.Findings}}
+    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">{{.}}</div>
+    {{end}}
+  </div>
+</div>
+{{end}}

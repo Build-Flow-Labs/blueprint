@@ -1,0 +1,26 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PBOM{{if .Title}} - {{.Title}}{{end}}</title>
+  <link rel="stylesheet" href="/ui/static/style.css">
+  <script src="/ui/static/htmx.min.js"></script>
+</head>
+<body>
+  <nav>
+    <a href="/ui" class="brand">PBOM Dashboard</a>
+    <a href="/ui">Overview</a>
+    <a href="/health">Health</a>
+    <a href="/status">Status</a>
+  </nav>
+  <main>
+    {{template "content" .}}
+  </main>
+  <footer>
+    <p>PBOM {{.Version}} &mdash; {{.PBOMCount}} documents indexed</p>
+  </footer>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,23 @@
+{{define "pbom_table_content"}}
+{{if .}}
+{{range .}}
+<tr>
+  <td><a href="/ui/pbom/{{.Owner}}/{{.Repo}}/{{.RunID}}">{{.Owner}}/{{.Repo}}</a></td>
+  <td>{{.Branch}}</td>
+  <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
+  <td>
+    {{if .Grade}}
+    <span class="grade grade-{{.Grade}}">{{.Grade}}</span>
+    {{else}}
+    <span class="grade grade-none">-</span>
+    {{end}}
+  </td>
+  <td>{{.ArtifactCount}}</td>
+  <td>{{timeAgo .Timestamp}}</td>
+  <td>{{.Actor}}</td>
+</tr>
+{{end}}
+{{else}}
+<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No PBOMs found</td></tr>
+{{end}}
+{{end}}
